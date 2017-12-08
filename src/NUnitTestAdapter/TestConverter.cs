@@ -50,10 +50,7 @@ namespace NUnit.VisualStudio.TestAdapter
             _sourceAssembly = sourceAssembly;
             _vsTestCaseMap = new Dictionary<string, TestCase>();
             _collectSourceInformation = collectSourceInformation;
-            if (_collectSourceInformation)
-            {
-                _navigationDataProvider = new NavigationDataProvider(sourceAssembly);
-            }
+            _navigationDataProvider = new NavigationDataProvider(sourceAssembly);
         }
 
         #endregion
@@ -145,19 +142,51 @@ namespace NUnit.VisualStudio.TestAdapter
                 LineNumber = 0
             };
 
-            if (_collectSourceInformation && _navigationDataProvider != null)
+            bool isTestNameScenario = IsTestNameScenario(nunitTest.MethodName, nunitTest.TestName.Name);
+
+            if ((_collectSourceInformation || isTestNameScenario) && _navigationDataProvider != null)
             {
-                var navData = _navigationDataProvider.GetNavigationData(nunitTest.ClassName, nunitTest.MethodName);
-                if (navData.IsValid)
+                try
                 {
-                    testCase.CodeFilePath = navData.FilePath;
-                    testCase.LineNumber = navData.LineNumber;
+                    var navData = _navigationDataProvider.GetNavigationData(nunitTest.ClassName, nunitTest.MethodName);
+                    if (navData.IsValid)
+                    {
+                        testCase.CodeFilePath = navData.FilePath;
+                        testCase.LineNumber = navData.LineNumber;
+                    }
+                }
+                catch
+                {
+                    // Above code will throw for VS for Mac. We dont want test discovery/execution to abort due to this.                    
                 }
             }
 
             testCase.AddTraitsFromNUnitTest(nunitTest);
 
             return testCase;
+        }
+
+        private bool IsTestNameScenario(string testCaseMethodName, string testCaseDisplayName)
+        {
+            if (string.Compare(testCaseMethodName, testCaseDisplayName) == 0)
+            {
+                return false;
+            }
+            else
+            {
+                // Either TestName or Parameterized test case scenario
+                int index = testCaseDisplayName.IndexOf('(');
+
+                if(index > -1)
+                {
+                    testCaseDisplayName = testCaseDisplayName.Remove(index).TrimEnd();
+                    return string.Compare(testCaseMethodName, testCaseDisplayName) != 0;
+                }
+                else
+                {
+                    return true;
+                }
+            }
         }
 
         // Public for testing
